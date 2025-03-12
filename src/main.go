@@ -5,6 +5,7 @@ import (
 	"log"
 
 	hdisc "github.com/KennyZ69/HdiscLib"
+	"github.com/KennyZ69/arpoof"
 )
 
 func main() {
@@ -25,8 +26,7 @@ func main() {
 
 	targetDev := devices[idx-1] // -1 because I am printing from 1 but it is 0 indexing language of course
 
-	// TODO: pass a pcap.Handle into the spoof func
-	// (instead of arp.Client - haven't worked the last time)
+	arpoof.Spoof(targetDev, devices[0])
 }
 
 // returns the index (i + 1) of a device the user chose and possible error

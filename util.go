@@ -6,10 +6,16 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
+
+	hdisc "github.com/KennyZ69/HdiscLib"
+	"github.com/google/gopacket/pcap"
 )
 
 const (
@@ -86,4 +92,17 @@ func parseGatewayIPBytes(gateway string) (net.IP, error) {
 	ip := make(net.IP, 4)
 	binary.LittleEndian.PutUint32(ip, uint32(ip32))
 	return ip, nil
+}
+
+func handleExit(handle *pcap.Handle, victim, original hdisc.DevData) {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, os.Kill, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan // when a signal gets to the channel, continue executing this routine
+		RestoreARPTables(handle, victim, original)
+		// I would like the program to continue after ending the spoofing but if I want to be using the usual binds ans ctrl-c then idk
+		log.Println("Exiting gracefully... ")
+		os.Exit(0)
+	}()
 }
