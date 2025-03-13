@@ -10,7 +10,7 @@ import (
 
 func main() {
 	devices, err := hdisc.ARPScan()
-	if err != nil {
+	if err != nil || len(devices) < 1 {
 		log.Fatalf("Error arp scanning for active devices: %s\n", err)
 	}
 
