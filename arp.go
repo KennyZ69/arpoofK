@@ -27,6 +27,24 @@ func NewARPReq(src, dest hdisc.DevData) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func NewARPRep(src, dest hdisc.DevData) ([]byte, error) {
+
+	eth, arp, err := buildARPPacket(src, dest)
+	if err != nil {
+		return nil, err
+	}
+
+	arp.Operation = layers.ARPReply
+
+	buf := gopacket.NewSerializeBuffer()
+	if err = gopacket.SerializeLayers(buf, serializeOpts, eth, arp); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+
+}
+
 func buildARPPacket(src, dest hdisc.DevData) (*layers.Ethernet, *layers.ARP, error) {
 	eth := &layers.Ethernet{
 		EthernetType: layers.EthernetTypeARP,

