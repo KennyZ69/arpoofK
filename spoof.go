@@ -1,10 +1,7 @@
 package arpoof
 
 import (
-	"bytes"
 	"log"
-	"math/rand"
-	"net"
 	"os"
 	"os/signal"
 	"time"
@@ -161,28 +158,9 @@ func readARP(handle *pcap.Handle, stop chan struct{}, target, gateway hdisc.DevD
 		case <-stop:
 			return
 		case p := <-packets:
-			// 	arpLayer := p.Layer(layers.LayerTypeARP)
-			// 	if arpLayer == nil {
-			// 		continue
-			// 	}
-			// 	pack := arpLayer.(*layers.ARP)
-			// 	if !bytes.Equal([]byte(ifi.HardwareAddr), pack.SourceHwAddress) {
-			// 		continue
-			// 	}
-			// 	if pack.Operation == layers.ARPReply {
-			// 		// idk
-			// 	}
-			// 	log.Printf("ARP packet (%d): %v (%v) -> %v (%v)\n", pack.Operation, net.IP(pack.SourceProtAddress), net.HardwareAddr(pack.SourceHwAddress), net.IP(pack.DstProtAddress), net.HardwareAddr(pack.DstHwAddress))
-
-			ethLayer := p.Layer(layers.LayerTypeEthernet)
-			if ethLayer == nil {
-				continue
-			}
-			pack := ethLayer.(*layers.Ethernet)
-
-			if bytes.Equal(pack.SrcMAC, target.Mac) || bytes.Equal(pack.DstMAC, target.Mac) {
-				log.Printf("\nCaptured packet: %v -> %v | Length: %d bytes\n", pack.SrcMAC, pack.DstMAC, len(p.Data()))
-			}
+			data := parsePacket(p)
+			log.Println(data)
+			saveToLog(data)
 		}
 	}
 }
