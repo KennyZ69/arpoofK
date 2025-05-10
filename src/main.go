@@ -27,6 +27,8 @@ func main() {
 	targetDev := devices[idx-1] // -1 because I am printing from 1 but it is 0 indexing language of course
 
 	arpoof.Spoof(targetDev, devices[0])
+
+	// arpoof.DNSpoof()
 }
 
 // returns the index (i + 1) of a device the user chose and possible error

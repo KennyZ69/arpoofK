@@ -15,8 +15,8 @@ import (
 	"syscall"
 
 	hdisc "github.com/KennyZ69/HdiscLib"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
+	// "github.com/google/gopacket"
+	// "github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 )
 
@@ -107,64 +107,6 @@ func handleExit(handle *pcap.Handle, victim, original hdisc.DevData) {
 		log.Println("Exiting gracefully... ")
 		os.Exit(0)
 	}()
-}
-
-func parsePacket(packet gopacket.Packet) string {
-	var data string = ""
-
-	ethLayer := packet.Layer(layers.LayerTypeEthernet)
-	if ethLayer != nil {
-		eth := ethLayer.(*layers.Ethernet)
-		data += fmt.Sprintf("Ethernet packet: %s -> %s | Payload: %s\n", eth.SrcMAC, eth.DstMAC, string(eth.Payload))
-
-	}
-
-	ipLayer := packet.Layer(layers.LayerTypeIPv4)
-	if ipLayer != nil {
-		ip := ipLayer.(*layers.IPv4)
-		data += fmt.Sprintf("IPv4 packet: %s -> %s | Prot: %d | Payload: %s\n", ip.SrcIP, ip.DstIP, string(ip.Payload))
-	}
-
-	tcpLayer := packet.Layer(layers.LayerTypeTCP)
-	if tcpLayer != nil {
-		tcp := tcpLayer.(*layers.TCP)
-		data += fmt.Sprintf("TCP: %d -> %d | SYN: %v | ACK: %v | FIN: %v\n", tcp.SrcPort, tcp.DstPort, tcp.SYN, tcp.ACK, tcp.FIN)
-	}
-
-	udpLayer := packet.Layer(layers.LayerTypeUDP)
-	if udpLayer != nil {
-		udp := udpLayer.(*layers.UDP)
-		data += fmt.Sprintf("UDP: %d -> %d | Payload: %s\n", udp.SrcPort, udp.DstPort, string(udp.Payload))
-	}
-
-	appLayer := packet.ApplicationLayer()
-	if appLayer != nil {
-		payload := string(appLayer.Payload())
-		if strings.Contains(payload, "HTTP/1.1") {
-			data += fmt.Sprintf(parseHTTP(payload))
-		}
-	}
-
-	return data
-}
-
-func parseHTTP(payload string) string {
-	var ret string = ""
-
-	lines := strings.Split(payload, "\n")
-
-	if len(lines) > 0 {
-		ret += fmt.Sprintf("HTTP Request: %s\n", lines[0])
-	}
-
-	for _, line := range lines[1:] {
-		if line == "\r" || line == "" {
-			break
-		}
-		ret += fmt.Sprintf("	%s\n", line)
-	}
-
-	return ret
 }
 
 func saveToLog(data string) {
