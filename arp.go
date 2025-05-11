@@ -7,9 +7,11 @@ import (
 )
 
 var (
+	// serializing options for gopacket layers and buffer later
 	serializeOpts = gopacket.SerializeOptions{FixLengths: true, ComputeChecksums: true}
 )
 
+// NewARPReq makes a new arp request using buildARPPacket function and returns it in bytes
 func NewARPReq(src, dest hdisc.DevData) ([]byte, error) {
 
 	eth, arp, err := buildARPPacket(src, dest)
@@ -27,6 +29,7 @@ func NewARPReq(src, dest hdisc.DevData) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// NewARPRep makes a new arp reply using buildARPPacket function and returns it in bytes
 func NewARPRep(src, dest hdisc.DevData) ([]byte, error) {
 
 	eth, arp, err := buildARPPacket(src, dest)
@@ -45,6 +48,8 @@ func NewARPRep(src, dest hdisc.DevData) ([]byte, error) {
 
 }
 
+// internal function to build an arp packet based on passed dev data...
+// returing ethernet and arp layers alongside a possible error
 func buildARPPacket(src, dest hdisc.DevData) (*layers.Ethernet, *layers.ARP, error) {
 	eth := &layers.Ethernet{
 		EthernetType: layers.EthernetTypeARP,

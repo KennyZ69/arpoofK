@@ -10,6 +10,7 @@ import (
 	"github.com/google/gopacket/layers"
 )
 
+// PacketStats is a struct used just in utility functions as a counter of different packet types intercepted
 type PacketStats struct {
 	Ethernet int
 	IPv4     int
@@ -66,33 +67,33 @@ func parsePacket(packet gopacket.Packet) string {
 	ethLayer := packet.Layer(layers.LayerTypeEthernet)
 	if ethLayer != nil {
 		eth := ethLayer.(*layers.Ethernet)
-		data += fmt.Sprintf("Ethernet packet: %s -> %s | Payload: %s\n", eth.SrcMAC, eth.DstMAC, string(eth.Payload))
+		data = fmt.Sprintf("Ethernet packet: %s -> %s | Payload: %s\n", eth.SrcMAC, eth.DstMAC, string(eth.Payload))
 
 	}
 
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
 	if ipLayer != nil {
 		ip := ipLayer.(*layers.IPv4)
-		data += fmt.Sprintf("IPv4 packet: %s -> %s | Prot: %d | Payload: %s\n", ip.SrcIP, ip.DstIP, string(ip.Payload))
+		data = fmt.Sprintf("IPv4 packet: %s -> %s | Prot: %d | Payload: %s\n", ip.SrcIP, ip.DstIP, string(ip.Payload))
 	}
 
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
 	if tcpLayer != nil {
 		tcp := tcpLayer.(*layers.TCP)
-		data += fmt.Sprintf("TCP: %d -> %d | SYN: %v | ACK: %v | FIN: %v\n", tcp.SrcPort, tcp.DstPort, tcp.SYN, tcp.ACK, tcp.FIN)
+		data = fmt.Sprintf("TCP: %d -> %d | SYN: %v | ACK: %v | FIN: %v\n", tcp.SrcPort, tcp.DstPort, tcp.SYN, tcp.ACK, tcp.FIN)
 	}
 
 	udpLayer := packet.Layer(layers.LayerTypeUDP)
 	if udpLayer != nil {
 		udp := udpLayer.(*layers.UDP)
-		data += fmt.Sprintf("UDP: %d -> %d | Payload: %s\n", udp.SrcPort, udp.DstPort, string(udp.Payload))
+		data = fmt.Sprintf("UDP: %d -> %d | Payload: %s\n", udp.SrcPort, udp.DstPort, string(udp.Payload))
 	}
 
 	appLayer := packet.ApplicationLayer()
 	if appLayer != nil {
 		payload := string(appLayer.Payload())
 		if strings.Contains(payload, "HTTP/1.1") {
-			data += fmt.Sprintf(parseHTTP(payload))
+			data = fmt.Sprintf(parseHTTP(payload))
 		}
 	}
 

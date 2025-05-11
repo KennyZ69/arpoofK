@@ -15,8 +15,6 @@ import (
 	"syscall"
 
 	hdisc "github.com/KennyZ69/HdiscLib"
-	// "github.com/google/gopacket"
-	// "github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 )
 
@@ -40,7 +38,7 @@ func readFile(file string) ([]byte, error) {
 	return bytes, nil
 }
 
-// GetGateway returns the ip of the gateway as a string (from /proc/net/route file) and error
+// GetGateway returns the ip of the gateway as a string (from /proc/net/route file) and error ! I guess works only on Linux !
 func GetGateway() (net.IP, error) {
 	bytes, err := readFile(routeFile)
 	if err != nil {
@@ -77,14 +75,14 @@ func parseGatewayFile(file []byte) (net.IP, error) {
 			continue
 		}
 
-		// Now return the found IP
+		// returning found IP address in the file
 		return parseGatewayIPBytes(fields[2])
 	}
 
 	return nil, fmt.Errorf("No gateway found\n")
 }
 
-// Gets the gateway ip as a string in hex and returns it as net.IP and error
+// Gets the gateway IP as a string in hex and returns it as net.IP and error
 func parseGatewayIPBytes(gateway string) (net.IP, error) {
 	ip32, err := strconv.ParseUint(gateway, 16, 32)
 	if err != nil {
@@ -103,7 +101,6 @@ func handleExit(handle *pcap.Handle, victim, original hdisc.DevData) {
 	go func() {
 		<-sigChan // when a signal gets to the channel, continue executing this routine
 		RestoreARPTables(handle, victim, original)
-		// I would like the program to continue after ending the spoofing but if I want to be using the usual binds ans ctrl-c then idk
 		log.Println("Exiting gracefully... ")
 		os.Exit(0)
 	}()
